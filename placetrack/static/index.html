@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart PlaceTrack</title>
+<style>
+:root{--navy:#1f3864;--blue:#2f5496;--bg:#f4f6fb;--card:#fff;--line:#dde3ef;--tx:#1d2433}
+*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--navy);color:#fff;padding:14px 28px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:20px;margin:0}main{max-width:1100px;margin:22px auto;padding:0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px}
+.auth{max-width:380px;margin:70px auto}.auth h2{margin-top:0;color:var(--navy)}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid #c5cddd;border-radius:6px;font:inherit;margin:4px 0 10px}
+button{background:var(--blue);color:#fff;border:0;border-radius:6px;padding:9px 16px;font:inherit;cursor:pointer}
+button.ghost{background:transparent;color:var(--blue);border:1px solid var(--blue)}button.danger{background:#c0392b;padding:5px 10px}
+.msg{color:#c0392b;min-height:20px;font-size:14px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.stat b{display:block;font-size:26px;color:var(--navy)}.stat span{font-size:13px;color:#5b667d}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:18px}.form{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+table{width:100%;border-collapse:collapse;font-size:14px}th{background:var(--blue);color:#fff;text-align:left;padding:9px}
+td{padding:8px 9px;border-bottom:1px solid var(--line)}tr:nth-child(even) td{background:#f7f9fd}
+.badge{padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600}
+.Applied{background:#e1e8f8;color:#2f5496}.Shortlisted{background:#fff2cc;color:#8a6d00}.Interview{background:#e6dcf5;color:#5b3a9a}
+.Offer{background:#d9f2e0;color:#1d7a3a}.Rejected{background:#fbe0dd;color:#b03a2e}
+.bar{display:flex;gap:10px;margin-bottom:10px}.bar input,.bar select{margin:0}
+@media(max-width:800px){.stats{grid-template-columns:1fr 1fr}.row{grid-template-columns:1fr}}
+</style></head><body>
+<header><h1>Smart PlaceTrack</h1><div id="who" style="display:none"><span id="uname"></span> &nbsp;<button class="ghost" style="color:#fff;border-color:#fff" onclick="logout()">Log out</button></div></header>
+<main>
+<section id="auth" class="card auth"><h2 id="atitle">Login</h2>
+<input id="name" placeholder="Full name" style="display:none"><input id="email" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password">
+<div class="msg" id="amsg"></div><button onclick="submitAuth()" id="abtn">Login</button>
+<p style="font-size:14px"><a href="#" onclick="toggle();return false" id="aswitch">New here? Create an account</a></p></section>
+
+<section id="app" style="display:none">
+<div class="stats"><div class="stat"><b id="s-total">0</b><span>Total applications</span></div><div class="stat"><b id="s-int">0</b><span>Shortlisted / Interview</span></div>
+<div class="stat"><b id="s-offer">0%</b><span>Offer rate</span></div><div class="stat"><b id="s-next" style="font-size:18px">—</b><span id="s-next-d">Next deadline</span></div></div><br>
+<div class="row"><div class="card"><h3 style="margin-top:0">Applications by stage</h3><canvas id="chart" width="460" height="230" style="width:100%"></canvas></div>
+<div class="card"><h3 style="margin-top:0">Add application</h3><div class="form">
+<div>Company<input id="f-company"></div><div>Role<input id="f-role"></div>
+<div>Stage<select id="f-status"></select></div><div>Package (LPA)<input id="f-ctc" type="number" step="0.1"></div>
+<div>Deadline<input id="f-deadline" type="date"></div><div>Notes<input id="f-notes"></div></div>
+<div class="msg" id="fmsg"></div><button onclick="addApp()">Save application</button></div></div>
+<div class="card"><div class="bar"><input id="q" placeholder="Search company or role…" oninput="render()"><select id="flt" onchange="render()" style="max-width:180px"></select></div>
+<table><thead><tr><th>Company</th><th>Role</th><th>Package</th><th>Deadline</th><th>Stage</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+</section></main>
+<script>
+const ST=["Applied","Shortlisted","Interview","Offer","Rejected"];let apps=[],reg=false;
+const $=i=>document.getElementById(i);
+async function api(u,m="GET",b){const r=await fetch(u,{method:m,headers:{"Content-Type":"application/json"},body:b?JSON.stringify(b):undefined});
+ let d={};try{d=await r.json()}catch(e){}if(!r.ok)throw new Error(d.error||"Request failed");return d}
+$("f-status").innerHTML=ST.map(s=>`<option>${s}</option>`).join("");
+$("flt").innerHTML='<option value="">All stages</option>'+ST.map(s=>`<option>${s}</option>`).join("");
+function toggle(){reg=!reg;$("name").style.display=reg?"":"none";$("atitle").textContent=$("abtn").textContent=reg?"Register":"Login";
+ $("aswitch").textContent=reg?"Have an account? Login":"New here? Create an account";$("amsg").textContent=""}
+async function submitAuth(){try{
+ if(reg){await api("/register","POST",{name:$("name").value,email:$("email").value,password:$("pw").value});toggle();$("amsg").style.color="#1d7a3a";$("amsg").textContent="Account created. Please log in.";return}
+ const d=await api("/login","POST",{email:$("email").value,password:$("pw").value});start(d.name)}catch(e){$("amsg").style.color="#c0392b";$("amsg").textContent=e.message}}
+function start(n){$("auth").style.display="none";$("app").style.display="";$("who").style.display="";$("uname").textContent=n;load()}
+async function logout(){await api("/logout","POST");location.reload()}
+async function load(){apps=await api("/api/applications");render();const s=await api("/api/stats");
+ $("s-total").textContent=s.total;$("s-int").textContent=(s.by_status.Shortlisted||0)+(s.by_status.Interview||0);$("s-offer").textContent=s.offer_rate+"%";
+ $("s-next").textContent=s.next_deadline?s.next_deadline.company:"—";$("s-next-d").textContent=s.next_deadline?"Deadline "+s.next_deadline.deadline:"Next deadline";chart(s.by_status)}
+function render(){const q=$("q").value.toLowerCase(),f=$("flt").value;
+ $("rows").innerHTML=apps.filter(a=>(!f||a.status===f)&&(a.company+a.role).toLowerCase().includes(q)).map(a=>`<tr><td><b>${esc(a.company)}</b></td><td>${esc(a.role)}</td>
+ <td>${a.ctc?a.ctc+" LPA":"—"}</td><td>${a.deadline||"—"}</td><td><select onchange="setStatus(${a.id},this.value)" class="badge ${a.status}" style="width:auto;margin:0;border:0">${ST.map(s=>`<option ${s===a.status?"selected":""}>${s}</option>`).join("")}</select></td>
+ <td><button class="danger" onclick="del(${a.id})">Delete</button></td></tr>`).join("")||'<tr><td colspan="6" style="text-align:center;color:#888">No applications yet.</td></tr>'}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+async function addApp(){try{await api("/api/applications","POST",{company:$("f-company").value,role:$("f-role").value,status:$("f-status").value,ctc:$("f-ctc").value,deadline:$("f-deadline").value,notes:$("f-notes").value});
+ ["company","role","ctc","deadline","notes"].forEach(i=>$("f-"+i).value="");$("fmsg").textContent="";load()}catch(e){$("fmsg").textContent=e.message}}
+async function setStatus(id,v){await api("/api/applications/"+id,"PATCH",{status:v});load()}
+async function del(id){if(confirm("Delete this application?")){await api("/api/applications/"+id,"DELETE");load()}}
+function chart(c){const cv=$("chart"),x=cv.getContext("2d"),W=cv.width,H=cv.height,col=["#2f5496","#d4a017","#7b4fc4","#1d9a4a","#c0392b"],mx=Math.max(1,...ST.map(s=>c[s]||0));
+ x.clearRect(0,0,W,H);const bw=W/ST.length;ST.forEach((s,i)=>{const n=c[s]||0,h=(H-60)*n/mx;x.fillStyle=col[i];x.fillRect(i*bw+22,H-30-h,bw-44,h);
+ x.fillStyle="#1d2433";x.font="13px Arial";x.textAlign="center";x.fillText(n,i*bw+bw/2,H-36-h);x.fillText(s,i*bw+bw/2,H-10)})}
+api("/api/me").then(d=>start(d.name)).catch(()=>{});
+</script></body></html>
